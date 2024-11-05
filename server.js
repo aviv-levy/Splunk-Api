@@ -12,15 +12,28 @@ const app = express();
 // Middleware to parse JSON requests
 app.use(bodyParser.json());
 
+function checkStatusSevirity(status){
+    if(status>=200 && status <400)
+        return 'info';
+
+    else if(status>=400 && status <500)
+        return 'error';
+ 
+    else if(status>=500 && status <600)
+        return 'critical';
+}
 
 async function sendToSplunk(index, host, data) {
     // payload for Splunk
     const splunkPayload = {
         index: index,       // index name of db
         host: host, // Name of computer/Server
-        event: data,      // The event data you want to send
+        event: data, // The event data you want to send
         time: Date.now(), // Timestamp (optional)
         sourcetype: '_json', // Optional: Specify the sourcetype
+        fields:{
+            severity:checkStatusSevirity(data.status) // Sevrity level
+        }
     };
 
     // Send data to Splunk using axios
