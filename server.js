@@ -12,14 +12,17 @@ const app = express();
 // Middleware to parse JSON requests
 app.use(bodyParser.json());
 
-function checkStatusSevirity(status){
-    if(status>=200 && status <400)
+function checkStatusSevirity(status) {
+    if (status >= 200 && status < 300)
         return 'info';
 
-    else if(status>=400 && status <500)
+    if (status >= 300 && status < 400)
+        return 'warning';
+
+    else if (status >= 400 && status < 500)
         return 'error';
- 
-    else if(status>=500 && status <600)
+
+    else if (status >= 500 && status < 600)
         return 'critical';
 }
 
@@ -31,8 +34,8 @@ async function sendToSplunk(index, host, data) {
         event: data, // The event data you want to send
         time: Date.now(), // Timestamp (optional)
         sourcetype: '_json', // Optional: Specify the sourcetype
-        fields:{
-            severity:checkStatusSevirity(data.status) // Sevrity level
+        fields: {
+            severity: checkStatusSevirity(data.status), // Sevrity level
         }
     };
 
