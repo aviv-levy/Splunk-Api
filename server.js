@@ -3,9 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
-const os = require('os')
-const dns = require('dns');
-//const { SeverityNumber } = require('@opentelemetry/api-logs');
+const { IncomingWebhook } = require("ms-teams-webhook");
 
 const app = express();
 
@@ -26,13 +24,43 @@ function checkStatusSevirity(status) {
         return 'critical';
 }
 
-async function sendToSplunk(index, host, data) {
+// Microsoft Teams Notifications
+async function teamsNotification(data, host, time, teamsUrl) {
+    try {
+        if (!teamsUrl) {
+            throw new Error("MS_TEAMS_WEBHOOK_URL is required");
+        }
+        // Microsoft Teams Webhook notification send to channel
+        const webhook = new IncomingWebhook(teamsUrl);
+        await webhook.sendRawAdaptiveCard({
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            summary: `${host} Error ${data.status}`, // Notification box text
+            themeColor: "0078D7",
+            title: `${host} Error ${data.status}`,
+            sections: [
+                {
+                    activityTitle: `TraceID: `, // Title
+                    activitySubtitle: `${time.getUTCDate().toString().padStart(2, '0')}-${(time.getUTCMonth() + 1).toString().padStart(2, '0')}-${time.getUTCFullYear()} ${time.getUTCHours().toString().padStart(2, '0')}:${time.getUTCMinutes().toString().padStart(2, '0')}:${time.getUTCSeconds().toString().padStart(2, '0')}`, // Sub Title
+                    activityImage: "https://igorsec.blog/wp-content/uploads/2023/09/splunk.jpg", // Image of sender
+                    text: data.message || "Empty Message, Check in Splunk",
+                },
+            ],
+        });
+
+        console.log('Notification sent to Microsoft Teams Channel successfully');
+    } catch (error) {
+        console.error('Error sending Notification to Microsoft Teams:', error.message);
+    }
+}
+
+async function sendToSplunk(index, ip, data, time) {
     // payload for Splunk
     const splunkPayload = {
         index: index,       // index name of db
-        host: host, // Name of computer/Server
+        ip: ip, // Name of computer/Server
         event: data, // The event data you want to send
-        time: Date.now(), // Timestamp (optional)
+        time: time.toUTCString, // Timestamp (optional)
         sourcetype: '_json', // Optional: Specify the sourcetype
         fields: {
             severity: checkStatusSevirity(data.status), // Sevrity level
@@ -50,29 +78,21 @@ async function sendToSplunk(index, host, data) {
     console.log('Data sent to Splunk:', response.data);
 }
 
-// Convert Ip Adress to dns
-function findDNSByIpAdress(ipAdress) {
-    try {
-        dns.reverse(host, (err, hostnames) => {
-            console.log('Hostnames:', hostnames);
-            return hostnames[0];
-        });
-    }
-    catch {
-        return ipAdress;
-    }
-}
-
-
 // Route to receive JSON data and send to Splunk
 app.post('/send-to-splunk/:index', async (req, res) => {
     const data = req.body;
+    const teamsUrl = data.teamsUrl; // Microsoft Teams Url Webhook;
     const index = req.params.index;
+    const time = new Date(Date.now());
     try {
+        delete data.teamsUrl;
         const ip = req.socket.remoteAddress.replace('::ffff:', ''); //remove ::ffff: from the ip
-        const host = findDNSByIpAdress(ip)
 
-        await sendToSplunk(index, host, data);
+        await sendToSplunk(index, ip, data, time);
+
+        if (data.status >= 400)
+            await teamsNotification(data, ip, time, teamsUrl); // ip needs to change to hostname 
+
         res.status(200).json({ message: 'Data sent to Splunk successfully' });
     } catch (error) {
         console.error('Error sending data to Splunk:', error);
