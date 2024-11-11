@@ -25,7 +25,7 @@ function checkStatusSevirity(status) {
 }
 
 // Microsoft Teams Notifications
-async function teamsNotification(data, host, time, teamsUrl) {
+async function teamsNotification(data, time, teamsUrl) {
     try {
         if (!teamsUrl) {
             throw new Error("MS_TEAMS_WEBHOOK_URL is required");
@@ -35,9 +35,9 @@ async function teamsNotification(data, host, time, teamsUrl) {
         await webhook.sendRawAdaptiveCard({
             "@type": "MessageCard",
             "@context": "https://schema.org/extensions",
-            summary: `${host} Error ${data.status}`, // Notification box text
+            summary: `${data.hostname} Error ${data.status}`, // Notification box text
             themeColor: "0078D7",
-            title: `${host} Error ${data.status}`,
+            title: `${data.hostname} Error ${data.status}`,
             sections: [
                 {
                     activityTitle: `TraceID: `, // Title
@@ -54,11 +54,11 @@ async function teamsNotification(data, host, time, teamsUrl) {
     }
 }
 
-async function sendToSplunk(index, ip, data, time) {
+async function sendToSplunk(index, data, time) {
     // payload for Splunk
     const splunkPayload = {
         index: index,       // index name of db
-        ip: ip, // Name of computer/Server
+        host: data.hostname, // Name of computer/Server
         event: data, // The event data you want to send
         time: time.toUTCString, // Timestamp (optional)
         sourcetype: '_json', // Optional: Specify the sourcetype
@@ -87,11 +87,11 @@ app.post('/send-to-splunk/:index', async (req, res) => {
     try {
         delete data.teamsUrl;
         const ip = req.socket.remoteAddress.replace('::ffff:', ''); //remove ::ffff: from the ip
-
-        await sendToSplunk(index, ip, data, time);
+        data.ip = ip;
+        await sendToSplunk(index, data, time);
 
         if (data.status >= 400)
-            await teamsNotification(data, ip, time, teamsUrl); // ip needs to change to hostname 
+            await teamsNotification(data, time, teamsUrl); // ip needs to change to hostname 
 
         res.status(200).json({ message: 'Data sent to Splunk successfully' });
     } catch (error) {
