@@ -100,6 +100,11 @@ app.post('/send-to-splunk/:index', async (req, res) => {
     }
 });
 
+app.get('/', (req,res) =>{
+
+    res.status(200).send('200 OK')
+})
+
 // Start the Express server
 app.listen(process.env.PORT, () => {
     console.log(`Server running on port ${process.env.PORT}`);
