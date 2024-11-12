@@ -4,6 +4,7 @@ const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
 const { IncomingWebhook } = require("ms-teams-webhook");
+const { v1: uuidv1 } = require('uuid'); // Use v1 for timestamp-based UUIDs
 
 const app = express();
 
@@ -40,7 +41,7 @@ async function teamsNotification(data, time, teamsUrl) {
             title: `${data.hostname} Error ${data.status}`,
             sections: [
                 {
-                    activityTitle: `TraceID: `, // Title
+                    activityTitle: `TraceID: ${data.trace_id}`, // Title
                     activitySubtitle: `${time.getUTCDate().toString().padStart(2, '0')}-${(time.getUTCMonth() + 1).toString().padStart(2, '0')}-${time.getUTCFullYear()} ${time.getUTCHours().toString().padStart(2, '0')}:${time.getUTCMinutes().toString().padStart(2, '0')}:${time.getUTCSeconds().toString().padStart(2, '0')}`, // Sub Title
                     activityImage: "https://igorsec.blog/wp-content/uploads/2023/09/splunk.jpg", // Image of sender
                     text: data.message || "Empty Message, Check in Splunk",
@@ -88,6 +89,7 @@ app.post('/send-to-splunk/:index', async (req, res) => {
         delete data.teamsUrl;
         const ip = req.socket.remoteAddress.replace('::ffff:', ''); //remove ::ffff: from the ip
         data.ip = ip;
+        data.trace_id = uuidv1().replace(/-/g, ''); // Create Trace ID from timestamp
         await sendToSplunk(index, data, time);
 
         if (data.status >= 400)
@@ -100,8 +102,7 @@ app.post('/send-to-splunk/:index', async (req, res) => {
     }
 });
 
-app.get('/', (req,res) =>{
-
+app.get('/', (req, res) => {
     res.status(200).send('200 OK')
 })
 
